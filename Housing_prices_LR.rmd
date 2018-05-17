@@ -1,0 +1,32 @@
+---
+title: "Housing prices"
+author: "Nitin Arun Khandare"
+date: "17 May 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(randomForest)
+library(dplyr)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+hp_train = read.csv("E:/Term 2/Machine Learning/Datasets/Housing Price/housing_train.csv")
+hp_test = read.csv("E:/Term 2/Machine Learning/Datasets/Housing Price/housing_test.csv")
+```
+
+```{r}
+model_lm = lm(medv~., data = hp_train)
+
+hp_test$medv = predict(model_lm, hp_test)
+
+data = hp_test[,c('id','medv')]
+data
+```
+
+```{r}
+
+```
+
