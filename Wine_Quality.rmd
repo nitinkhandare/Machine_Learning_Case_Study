@@ -1,0 +1,48 @@
+---
+title: "ML_Assignment.rmd"
+author: "Nitin Arun Khandare"
+date: "4 May 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library('randomForest')
+library('dplyr')
+wine_train = read.csv("E:/Term 2/Machine Learning/Datasets/wine_train.csv")
+wine_test = read.csv("E:/Term 2/Machine Learning/Datasets/wine_test.csv")
+wine_act = read.csv("E:/Term 2/Machine Learning/Datasets/Wine Data/wine_actual.csv")
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+
+wine_train$quality <- as.factor(wine_train$quality)
+m_try <- round(sqrt(length(names(wine_train))))
+
+wn_model <- randomForest(quality~.,data = wine_train, mtry=m_try,ntree= 120)
+predict_rslt <- predict(wn_model,wine_test%>%select(-quality,-id))
+
+predict_rslt <- as.character(predict_rslt)
+predict_rslt <- as.integer(predict_rslt)
+class(predict_rslt)
+pred <- c()
+unique(predict_rslt)
+for(i in 1:length(predict_rslt)){
+ if(predict_rslt[i] == 6){
+   pred <- c(pred,'normal')
+ }
+ else if(predict_rslt[i] > 6){
+   pred <- c(pred,'good')
+ }
+ else 
+   pred <- c(pred,'bad')
+ 
+}
+
+wine_test$taste <- pred
+
+wine_t = wine_test[,c('id','taste')]
+
+accuracy = nrow(wine_act%>%filter(taste==predict))/nrow(wine_act)
+```
