@@ -1,0 +1,38 @@
+---
+title: "Credit worthiness_RF"
+author: "Nitin Arun Khandare"
+date: "17 May 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(randomForest)
+library(dplyr)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Given the following dataset, you need to train your model to predict the Credit worthiness of a person based on the given attributes.
+
+## The training data have two classes for the credit worthiness: Good or Bad. There are predictors related to attributes, such as: checking account status, duration, credit history, purpose of the loan, amount of the loan, savings accounts or bonds, employment duration, Installment rate in percentage of disposable income, personal information, other debtors/guarantors, residence duration, property, age, other installment plans, housing, number of existing credits, job information, Number of people being liable to provide maintenance for, telephone, and foreign worker status.
+
+## Many of these predictors are discrete and have been expanded into several 0/1 indicator variables
+```{r}
+cw_train = read.csv("E:/Term 2/Machine Learning/Datasets/Credit worthiness/credit_train.csv")
+
+cw_test = read.csv("E:/Term 2/Machine Learning/Datasets/Credit worthiness/credit_test.csv")
+```
+
+
+```{r}
+
+model_rf = randomForest(Class~., data = cw_train)
+
+cw_test$Class = predict(model_rf,cw_test)
+
+cw = cw_test[,c('id','Class')]
+
+
+Accuracy = mean(predicted == cw_test$class)
+Accuracy
+```
+
