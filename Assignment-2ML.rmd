@@ -1,0 +1,293 @@
+---
+title: "Assignment2ML"
+author: "Nitin Arunram"
+date: "23 May 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(caret)
+library(class)
+library(BBmisc)
+library(tree)
+library(dplyr)
+library(rpart)
+library(knitr)
+library(corrplot)
+library(randomForest)
+library(e1071)
+library(adabag)
+credit = read.csv("E:/Term 2/Machine Learning/Datasets/credit-default.csv")
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Percentage of missing values in each column and display the same
+```{r}
+colSums(is.na(credit))
+```
+
+
+
+## Boxplot to find the outlier range
+```{r}
+data1 = credit
+boxplot(data1[,c(2,8,11,13)],col = 'green')
+boxplot(data1[,5],col = 'red')
+```
+
+
+## Histogram of Numarical Column
+```{r}
+
+hist(credit$age,col='purple')
+
+hist(credit$amount,col='red')
+
+hist(credit$installment_rate,col='blue')
+
+hist(credit$months_loan_duration,col='green')
+
+```
+
+
+## Percentage Of Outlier in Credit Numaric Column
+```{r}
+PerOutier = function(df){
+  num=sapply(df, is.numeric)
+  NumOut = function(x){
+    q1 = quantile(x, 0.25, na.rm = T)
+    q2 = quantile(x, 0.50, na.rm = T)
+    q3 = quantile(x, 0.75, na.rm = T)
+    iqr = q3-q1
+    outlier = x[x > q3 + 1.5*iqr | x < q1 - 1.5*iqr]
+    percent = (length(outlier) / length(x))*100
+return(percent)
+  }
+  data=sapply(df[,num], NumOut)
+   return(as.data.frame(data))
+}
+
+kable(PerOutier(credit))
+```
+
+## Credit correlation analysis using corrplot 
+```{r}
+
+num = sapply(credit, function(x) is.numeric(x) & length(unique(x)) > 1)
+corrplot(cor(credit[,num]),order = 'hclust')
+```
+
+## Segmented Analysis using Annova
+```{r}
+
+var = credit
+var1 <- credit[,"default"]
+
+
+for(i in 1:nrow(var)){
+if(var[i,"default"] == 1){
+ var[i,"default"] = "Low"
+}
+ else
+   var[i,"default"] = "High"
+}
+var$dft_fct <- var1
+
+
+no_nm <- c()
+for(i in names(var)){
+ if(is.numeric(var[,i]))
+   no_nm <- c(no_nm,i)
+}
+var2 <- var[,no_nm]
+var$default <- as.factor(var$default)
+
+
+ps <- c()
+fs <- c()
+for(i in names(var2)){
+ anova1 = aov(var2[,i]~var[,'default'])
+ anova_test = unlist(summary(anova1))
+ p_val = anova_test[9]
+ ps = c(ps,p_val)
+ f_val = anova_test[7]
+ fs = c(fs,f_val)
+}
+
+
+df <- data.frame(com_1 = character(0),com_2 = character(0))
+df$com_1 <- as.character(df$com_1)
+df$com_2 <- as.character(df$com_2)
+
+y <- c("default",no_nm)
+y_cmb <- combn(y,2,simplify = F)
+
+for(i in 1:8){
+ df[i,1] = y_cmb[[i]][1]
+ df[i,2] = y_cmb[[i]][2]
+}
+
+df$P_value <- ps
+df$F_value <- fs
+kable(df)
+```
+
+### Chi-Square Test on Categorical Column in Credit dataset
+```{r}
+chi1 = chisq.test(credit$housing,credit$installment_plan)
+chi1
+
+chi2 = chisq.test(credit$purpose,credit$credit_history)
+chi2
+
+chi3 = chisq.test(credit$personal_status,credit$housing)
+chi3
+
+chi4 = chisq.test(credit$property,credit$installment_plan)
+chi4
+
+```
+
+## Property Based on Jobs and housing
+```{r}
+
+ggplot(credit,aes(x=job,y=housing)) + geom_jitter(stat = 'identity')+ geom_smooth() + facet_wrap(~property) + coord_flip()
+```
+
+
+## CrossTab Analysis using group
+```{r}
+credit$Default_group = cut(credit$amount, 4, labels=c('Group1', 'Group2', 'Group3', 'Group4'))
+job_Income = as.data.frame(table(credit$job, credit$Default_group))
+Saving_balance = as.data.frame(table(credit$savings_balance,credit$Default_group))
+
+ggplot(Saving_balance, aes(x=Var2, y=Var1, fill=-Freq))+ylab("Saving_balance")+xlab("amount")+geom_tile()
+
+ggplot(job_Income, aes(x=Var2, y=Var1, fill=-Freq))+geom_tile()+xlab('Amount')+ylab("Job_income")
+
+```
+
+
+
+#### Data spliting in training and testing sample
+```{r}
+cred_train = credit[sample(seq(1,nrow(credit)),0.7*nrow(credit)),]
+cred_test = credit[sample(seq(1,nrow(credit)),0.3*nrow(credit)),]
+```
+
+
+
+
+### Decision tree using caret library
+```{r}
+cred_train$default = as.factor(cred_train$default)
+set.seed(1000)
+trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 1)
+
+
+dtree_fit <- train(default~., data = cred_train, method = "rpart",
+                   parms = list(split = "information"),
+                   trControl = trctrl,
+                   tuneLength = 10)
+
+predictedtrain = predict(dtree_fit, cred_test)
+
+mean(cred_test$default == predictedtrain)*100
+```
+
+
+
+### Random Forest on Credit Data 
+```{r}
+
+mtry = round(sqrt(length(names(cred_train))))
+
+cred_train$default = as.factor(cred_train$default)
+
+model = randomForest(default~.,data = cred_train, mtry = mtry,ntree = 10)
+
+predict = predict(model,cred_test)
+
+predict = as.factor(predict)
+
+mean(cred_test$default == predict)*100
+```
+
+### Classification using boosting model 
+```{r}
+
+model_boost = boosting(default~.,data = cred_train)
+
+predict_obj = predict(model_boost, cred_test)
+
+cred_test$pred = predict_obj$class
+
+cred_test$default = as.factor(cred_test$default)
+
+cred_test$pred = as.factor(cred_test$pred)
+
+
+confusionMatrix(cred_test$pred, cred_test$default, positive = '1')
+
+mean(cred_test$default == cred_test$pred)
+```
+
+
+## K Nearest Neighbor Model Fitting 
+```{r}
+credit2 = read.csv("E:/Term 2/Machine Learning/Datasets/credit-default.csv")
+
+## Covert categorical columns to numerical columns
+dummy_obj = dummyVars(~., data=credit2)
+credit_new = data.frame(predict(dummy_obj, newdata = credit2))
+
+
+## Normalizing
+credit2_norm = normalize(credit_new, method='range', range = c(0,1))
+credit2_train =credit2_norm[sample(seq(1, nrow(credit2_norm)), (0.7*nrow(credit2_norm))),]
+credit2_test = credit2_norm[sample(seq(1, nrow(credit2_norm)), (0.3*nrow(credit2_norm))),]
+
+## Fitting Model
+credit2_test$predict = knn(credit2_train,
+                      credit2_test,
+                      cl=as.factor(credit2_train$default),
+                      k=1)
+credit2_test$default = as.factor(credit2_test$default)
+credit2_test$predict = as.factor(credit2_test$predict)
+confusionMatrix(credit2_test$predict, credit2_test$default, positive = '1')
+```
+
+
+
+### Naïve Bayes Classification Model Fitting
+```{r}
+
+credit1 = read.csv("E:/Term 2/Machine Learning/Datasets/credit-default.csv")
+
+## Binning the numarical Column to Categorical column
+credit1$default = as.factor(credit1$default)
+credit1$months_loan_duration_Fact = cut(credit1$months_loan_duration, seq(0,63,3))
+credit1$installment_rate_fact = cut(credit1$installment_rate, seq(0,4,2))
+credit1$residence_history_fact = cut(credit1$residence_history , seq(0,4,2))
+credit1$age_Fact = cut(credit1$age, seq(0,100,5))
+credit1$existing_credits_fact = cut(credit1$existing_credits, seq(0,5,2))
+credit1$dependents = as.factor(credit1$dependents)
+
+
+NewCredit = credit1[,c(-2,-5,-8,-11,-13,-16)]
+
+### Splitting data in trainig and testing Sample
+train = NewCredit[sample(seq(1,nrow(NewCredit)),0.7*nrow(NewCredit)),]
+test = NewCredit[sample(seq(1,nrow(NewCredit)),0.3*nrow(NewCredit)),]
+
+model_nb = naiveBayes(default~., data = train)
+
+predicted = predict(model_nb, test)
+
+table(predicted,test$default)
+
+
+```
+
+
